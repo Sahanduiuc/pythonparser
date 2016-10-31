@@ -435,6 +435,13 @@ class YieldFrom(expr):
     """
     _fields = ("value",)
     _locs = expr._locs + ("yield_loc", "from_loc")
+class Await(expr):
+    """
+    An await expression, e.g. ``await x``.
+
+    :ivar value: (:class:`AST`) awaited value
+    """
+    _fields = ("value",)
 
 # expr_context
 #     AugLoad
@@ -629,6 +636,23 @@ class For(stmt, keywordloc):
 class FunctionDef(stmt, keywordloc):
     """
     The ``def f(x):·  y`` (2.6) or ``def f(x) -> t:·  y`` (3.0) statement.
+
+    :ivar name: (string) name
+    :ivar args: (:class:`arguments`) formal arguments
+    :ivar returns: (:class:`AST`) return type annotation; **emitted since 3.0**
+    :ivar body: (list of :class:`AST`) body
+    :ivar decorator_list: (list of :class:`AST`) decorators
+    :ivar keyword_loc: location of ``def``
+    :ivar name_loc: location of name
+    :ivar arrow_loc: location of ``->``, if any; **emitted since 3.0**
+    :ivar colon_loc: location of ``:``, if any
+    :ivar at_locs: locations of decorator ``@``
+    """
+    _fields = ("name", "args", "returns", "body", "decorator_list")
+    _locs = keywordloc._locs + ("name_loc", "arrow_loc", "colon_loc", "at_locs")
+class AsyncFunctionDef(stmt, keywordloc):
+    """
+    The ``async def f(x) -> t:·  y`` (3.5) statement.
 
     :ivar name: (string) name
     :ivar args: (:class:`arguments`) formal arguments

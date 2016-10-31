@@ -63,7 +63,7 @@ class Lexer:
         | set(["<>"])
 
     _reserved_3_5 = _reserved_3_1 \
-        | set(["@", "@="])
+        | set(["@", "@=", "async def", "await"])
 
     _reserved = {
         (2, 6): _reserved_2_6,

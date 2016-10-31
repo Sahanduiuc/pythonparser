@@ -563,9 +563,9 @@ class Parser:
     decorators = Plus(Rule("decorator"))
     """decorators: decorator+"""
 
-    @action(Seq(Rule("decorators"), Alt(Rule("classdef"), Rule("funcdef"))))
+    @action(Seq(Rule("decorators"), Alt(Rule("classdef"), Rule("funcdef"), Rule("asyncfuncdef"))))
     def decorated(self, decorators, classfuncdef):
-        """decorated: decorators (classdef | funcdef)"""
+        """decorated: decorators (classdef | funcdef | asyncfuncdef)"""
         classfuncdef.at_locs = list(map(lambda x: x[0], decorators))
         classfuncdef.decorator_list = list(map(lambda x: x[1], decorators))
         classfuncdef.loc = classfuncdef.loc.join(decorators[0][0])
@@ -589,6 +589,20 @@ class Parser:
         if returns_opt:
             arrow_loc, returns = returns_opt
         return ast.FunctionDef(name=ident_tok.value, args=args, returns=returns,
+                               body=suite, decorator_list=[],
+                               at_locs=[], keyword_loc=def_loc, name_loc=ident_tok.loc,
+                               colon_loc=colon_loc, arrow_loc=arrow_loc,
+                               loc=def_loc.join(suite[-1].loc))
+
+    @action(Seq(Loc("async def"), Tok("ident"), Rule("parameters"),
+                Opt(Seq(Loc("->"), Rule("test"))),
+                Loc(":"), Rule("suite")))
+    def asyncfuncdef(self, def_loc, ident_tok, args, returns_opt, colon_loc, suite):
+        """(3.0-) funcdef: 'def' NAME parameters ['->' test] ':' suite"""
+        arrow_loc = returns = None
+        if returns_opt:
+            arrow_loc, returns = returns_opt
+        return ast.AsyncFunctionDef(name=ident_tok.value, args=args, returns=returns,
                                body=suite, decorator_list=[],
                                at_locs=[], keyword_loc=def_loc, name_loc=ident_tok.loc,
                                colon_loc=colon_loc, arrow_loc=arrow_loc,
@@ -826,11 +840,11 @@ class Parser:
     expr_stmt_1__26 = Rule("testlist")
     expr_stmt_1__32 = Rule("testlist_star_expr")
 
-    @action(Seq(Rule("augassign"), Alt(Rule("yield_expr"), Rule("testlist"))))
+    @action(Seq(Rule("augassign"), Alt(Rule("yield_expr"), Rule("await_expr"), Rule("testlist"))))
     def expr_stmt_2(self, augassign, rhs_expr):
         return ast.AugAssign(op=augassign, value=rhs_expr)
 
-    @action(Star(Seq(Loc("="), Alt(Rule("yield_expr"), Rule("expr_stmt_1")))))
+    @action(Star(Seq(Loc("="), Alt(Rule("yield_expr"), Rule("await_expr"), Rule("expr_stmt_1")))))
     def expr_stmt_3(self, seq):
         if len(seq) > 0:
             return ast.Assign(targets=list(map(lambda x: x[1], seq[:-1])), value=seq[-1][1],
@@ -919,7 +933,7 @@ class Parser:
         return ast.Pass(loc=stmt_loc, keyword_loc=stmt_loc)
 
     flow_stmt = Alt(Rule("break_stmt"), Rule("continue_stmt"), Rule("return_stmt"),
-                    Rule("raise_stmt"), Rule("yield_stmt"))
+                    Rule("raise_stmt"), Rule("yield_stmt"), Rule("await_expr"))
     """flow_stmt: break_stmt | continue_stmt | return_stmt | raise_stmt | yield_stmt"""
 
     @action(Loc("break"))
@@ -1130,11 +1144,11 @@ class Parser:
                           loc=loc, keyword_loc=assert_loc)
 
     @action(Alt(Rule("if_stmt"), Rule("while_stmt"), Rule("for_stmt"),
-                Rule("try_stmt"), Rule("with_stmt"), Rule("funcdef"),
+                Rule("try_stmt"), Rule("with_stmt"), Rule("funcdef"), Rule("asyncfuncdef"),
                 Rule("classdef"), Rule("decorated")))
     def compound_stmt(self, stmt):
         """compound_stmt: if_stmt | while_stmt | for_stmt | try_stmt | with_stmt |
-                          funcdef | classdef | decorated"""
+                          funcdef | asyncfuncdef | classdef | decorated"""
         return [stmt]
 
     @action(Seq(Loc("if"), Rule("test"), Loc(":"), Rule("suite"),
@@ -1550,7 +1564,7 @@ class Parser:
             value = False
         return ast.NameConstant(value=value, loc=tok.loc)
 
-    atom__30 = Alt(BeginEnd("(", Opt(Alt(Rule("yield_expr"), Rule("testlist_comp"))), ")",
+    atom__30 = Alt(BeginEnd("(", Opt(Alt(Rule("yield_expr"), Rule("await_expr"), Rule("testlist_comp"))), ")",
                             empty=lambda self: ast.Tuple(elts=[], ctx=None, loc=None)),
                    BeginEnd("[", Opt(Rule("testlist_comp__list")), "]",
                             empty=lambda self: ast.List(elts=[], ctx=None, loc=None)),
@@ -1980,3 +1994,9 @@ class Parser:
 
     yield_arg = Alt(yield_arg_1, Rule("testlist"))
     """(3.3-) yield_arg: 'from' test | testlist"""
+
+    @action(Seq(Loc("await"), Rule("test")))
+    def await_expr(self, await_loc, value):
+        """(3.5-) await_expr: 'await' test"""
+        return ast.Await(value=value,
+                         loc=await_loc)
